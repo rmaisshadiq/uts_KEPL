@@ -6,6 +6,7 @@ php artisan make:request UpdateMovieRequest
 
 2. Atur aturan validasi di dalam UpdateMovieRequest.php
 
+```
 <?php
 
 namespace App\Http\Requests;
@@ -78,8 +79,9 @@ class FileUploadService
         return $fileName;
     }
 }
-
+```
 2. Daftarkan Service di Controller
+```
 use App\Services\FileUploadService
 
 protected $fileService;
@@ -88,10 +90,10 @@ public function __construct(FileUploadService $fileService)
 {
     $this->fileService = $fileService;
 }
-
+```
 3. Gunakan Service di Method update()
 ganti jadi:
-
+```
 public function update(UpdateMovieRequest $request, $id)
 {
     $movie = Movie::findOrFail($id);
@@ -116,4 +118,4 @@ public function update(UpdateMovieRequest $request, $id)
 
     return redirect('/movies/data')->with('success', 'Data berhasil diperbarui');
 }
-
+```
