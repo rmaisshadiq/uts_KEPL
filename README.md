@@ -34,7 +34,7 @@ class UpdateMovieRequest extends FormRequest
         ];
     }
 }
-
+```
 3. Update MovieController agar pakai UpdateMovieRequest
 Pada method update() di MovieController.php, kita ubah tipe request dari Request menjadi UpdateMovieRequest.
 
@@ -49,7 +49,7 @@ Pisahkan proses upload dan manipulasi file (rename, simpan, hapus) dari controll
 1. buat step baru
 buat di : app/Services/FileUploadService.php
 isinya:
-
+```
 <?php
 
 namespace App\Services;
