@@ -1,49 +1,119 @@
-## About Laravel Movie DB
+A. Validasi ke Form Request
+===========================
 
-Ini adalah sistem database movie menggunakan laravel untuk mata kuliah Konstruksi dan Evolusi Perangkat Lunak Prodi Teknologi Rekayasa Perangkat Lunak Jurusan Teknologi Informasi Politeknik Negeri Padang.
+1. buat form request baru
+php artisan make:request UpdateMovieRequest
 
-Silahkan clone repository ini ke PC Anda.
-Jika Anda baru saja meng-clone repository proyek Laravel dan ingin menjalankan perintah migrasi, ada beberapa langkah yang perlu Anda lakukan terlebih dahulu. Berikut adalah langkah-langkahnya:
+2. Atur aturan validasi di dalam UpdateMovieRequest.php
 
-1. **Composer Install:**
-   Pastikan Anda telah menginstal Composer di sistem Anda. Kemudian, jalankan perintah berikut di terminal di direktori proyek Laravel Anda untuk menginstal dependensi:
+<?php
 
-    composer install
+namespace App\Http\Requests;
 
-2. **Environment File:**
-   Duplikat file `.env.example` menjadi `.env` di direktori proyek Anda. Sesuaikan pengaturan database dan konfigurasi lainnya di file `.env` sesuai dengan kebutuhan Anda.
+use Illuminate\Foundation\Http\FormRequest;
 
-    cp .env.example .env
+class UpdateMovieRequest extends FormRequest
+{
+    // Mengizinkan semua user untuk melakukan request ini
+    public function authorize(): bool
+    {
+        return true;
+    }
 
-3. **Generate Application Key:**
-   Laravel menggunakan kunci aplikasi untuk enkripsi data. Jalankan perintah berikut untuk menghasilkan kunci aplikasi:
+    // Aturan validasi
+    public function rules(): array
+    {
+        return [
+            'judul' => 'required|string|max:255',
+            'category_id' => 'required|integer',
+            'sinopsis' => 'required|string',
+            'tahun' => 'required|integer',
+            'pemain' => 'required|string',
+            'foto_sampul' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ];
+    }
+}
 
-    php artisan key:generate
+3. Update MovieController agar pakai UpdateMovieRequest
+Pada method update() di MovieController.php, kita ubah tipe request dari Request menjadi UpdateMovieRequest.
 
-4. **Set Database Connection:**
-   Pastikan bahwa pengaturan koneksi database di file `.env` sesuai dengan konfigurasi database Anda.
+4. Hapus kode Validator::make() karena validasi sudah otomatis
 
-   Contoh: Jika Anda membuat database dbmovie, maka di file `.env` ubahlah `DB_DATABASE=laravel` menjadi `DB_DATABASE=dbmovie`
 
-6. **Run Migrations:**
-   Sekarang Anda dapat menjalankan perintah migrasi untuk membuat tabel-tabel database:
+B. Refactor Upload File ke Service Class
+========================================
+Tujuan:
+Pisahkan proses upload dan manipulasi file (rename, simpan, hapus) dari controller ke dalam FileUploadService, agar controller tetap clean dan logika upload lebih mudah di-maintain.
 
-    php artisan migrate
+1. buat step baru
+buat di : app/Services/FileUploadService.php
+isinya:
 
-    Perintah ini akan mengeksekusi semua migrasi yang terkandung di proyek Laravel ini.
+<?php
 
-7. **Run Seeds (Opsional):**
-   Proyek ini menggunakan _seeding_ untuk mengisi basis data awal, jalankan perintah berikut:
+namespace App\Services;
 
-    php artisan db:seed
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\File;
 
-    Perintah ini akan menjalankan seeder yang telah didefinisikan.
+class FileUploadService
+{
+    /**
+     * Upload gambar dan kembalikan nama file barunya.
+     */
+    public function uploadImage($file, $oldFileName = null, $destinationPath = 'images')
+    {
+        // Generate nama file acak
+        $fileName = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
 
-8. **Serve Aplikasi:**
-   Setelah langkah-langkah di atas selesai, Anda dapat menjalankan server pengembangan Laravel untuk melihat proyek Anda:
+        // Simpan file ke folder tujuan (default: public/images)
+        $file->move(public_path($destinationPath), $fileName);
 
-    php artisan serve
+        // Hapus file lama jika ada
+        if ($oldFileName && File::exists(public_path("$destinationPath/$oldFileName"))) {
+            File::delete(public_path("$destinationPath/$oldFileName"));
+        }
 
-    Aplikasi akan berjalan di http://localhost:8000 secara default.
+        // Kembalikan nama file baru
+        return $fileName;
+    }
+}
 
-_Credit by: Yori Adi Atma_
+2. Daftarkan Service di Controller
+use App\Services\FileUploadService
+
+protected $fileService;
+
+public function __construct(FileUploadService $fileService)
+{
+    $this->fileService = $fileService;
+}
+
+3. Gunakan Service di Method update()
+ganti jadi:
+
+public function update(UpdateMovieRequest $request, $id)
+{
+    $movie = Movie::findOrFail($id);
+
+    if ($request->hasFile('foto_sampul')) {
+        // Gunakan service untuk upload + hapus foto lama
+        $fileName = $this->fileService->uploadImage($request->file('foto_sampul'), $movie->foto_sampul);
+
+        // Update data film + foto baru
+        $movie->update([
+            'judul' => $request->judul,
+            'sinopsis' => $request->sinopsis,
+            'category_id' => $request->category_id,
+            'tahun' => $request->tahun,
+            'pemain' => $request->pemain,
+            'foto_sampul' => $fileName,
+        ]);
+    } else {
+        // Update data film tanpa mengganti foto
+        $movie->update($request->only(['judul', 'sinopsis', 'category_id', 'tahun', 'pemain']));
+    }
+
+    return redirect('/movies/data')->with('success', 'Data berhasil diperbarui');
+}
+
